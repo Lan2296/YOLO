@@ -77,10 +77,7 @@ def training_loop(loader, model, optimizer, loss_fn, scaler, scaled_anchors):
         mlflow.log_metric("Batch loss", loss.item(), step= _)
 
         mlflow.log_metric("epoch mean loss: ", mean_loss)
-
-       
-
-
+     
 def evaluate(dataloader, model, loss_fn, scaled_anchors):
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
@@ -272,32 +269,7 @@ def test():
         #print("Ouput is none", outputs is None)
         #print("output", outputs)
         #print(type(outputs))
-        '''
-        print([m for m in dir(loaded_model) if not m.startswith("_")])
-        if isinstance(outputs, list):
-            print("Modell gibt eine Liste zurück mit", len(outputs),"Elementen")
-            outputs_tensor = outputs[0]
-        else:
-            outputs_tensor = outputs
-        
-        print("Tensor shape:", outputs_tensor.shape)
-        #prediction = torch.argmax(outputs_tensor, dim =1)
-          #print("Vorhersageklasse:", prediction.item())   
-        
-        all_detections =[]
-
-        for out in outputs:
-            B,anchor,S,_,C = out.shape
-
-            reshape = out.reshape(B,anchor*S*S,C)
-            all_detections.append(reshape)
-
-        all_detections_tensor = torch.cat(all_detections, dim=1)
-        predictions = all_detections_tensor[0]
-        class_score = predictions[:,5:]
-        class_conf, class_pred = class_score.max(dim=1)  
-        print("class confindence", class_conf, "class prediction", class_pred)  
-        '''
+       
         boxes =[]
         for i, out in enumerate(outputs):
             grid_size= out.shape[2]
