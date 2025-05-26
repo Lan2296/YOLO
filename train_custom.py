@@ -248,8 +248,7 @@ def test():
 		), 
 		# Normalize the image 
 		A.Normalize( 
-            mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255
-			
+			mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255
 		), 
 		# Convert the image to PyTorch tensor 
 		ToTensorV2() 
