@@ -90,6 +90,7 @@ class YOLO(nn.Module):
 
 		# Layers list for YOLOv3 
 		self.layers = nn.ModuleList([ 
+			################ Backbone  ################
 			CNNBlock(in_channels, 32, kernel_size=3, stride=1, padding=1), 
 			CNNBlock(32, 64, kernel_size=3, stride=2, padding=1), 
 			ResidualBlock(64, num_repeats=1), 
@@ -100,26 +101,30 @@ class YOLO(nn.Module):
 			CNNBlock(256, 512, kernel_size=3, stride=2, padding=1), 
 			ResidualBlock(512, num_repeats=8), 
 			CNNBlock(512, 1024, kernel_size=3, stride=2, padding=1), 
-			ResidualBlock(1024, num_repeats=4), ################ endet Darknet-53
+			ResidualBlock(1024, num_repeats=4),
+			################ Neck  ################
 			CNNBlock(1024, 512, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(512, 1024, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(1024, use_residual=False, num_repeats=1), 
+			## Erste Skala (größte Objekte)
 			CNNBlock(1024, 512, kernel_size=1, stride=1, padding=0), 
 			ScalePrediction(512, num_classes=num_classes), 
 			CNNBlock(512, 256, kernel_size=1, stride=1, padding=0), 
+			#### Upsampling für mittlere Skala
 			nn.Upsample(scale_factor=2), 
 			CNNBlock(768, 256, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(256, 512, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(512, use_residual=False, num_repeats=1), 
 			CNNBlock(512, 256, kernel_size=1, stride=1, padding=0), 
 			ScalePrediction(256, num_classes=num_classes), 
+			#### Upsampling für kleinste Skala
 			CNNBlock(256, 128, kernel_size=1, stride=1, padding=0), 
 			nn.Upsample(scale_factor=2), 
 			CNNBlock(384, 128, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(128, 256, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(256, use_residual=False, num_repeats=1), 
 			CNNBlock(256, 128, kernel_size=1, stride=1, padding=0), 
-			ScalePrediction(128, num_classes=num_classes) 
+			ScalePrediction(128, num_classes=num_classes)
 		]) 
 	
 	# Forward pass for YOLOv3 with route connections and scale predictions 
