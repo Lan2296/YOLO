@@ -29,7 +29,7 @@ print(f"Training device: {device}")
 #Training loop
 # Define the train function to train the model 
 def training_loop(loader, model, optimizer, loss_fn, scaler, scaled_anchors): 
-    
+    model.train()
     # Creating a progress bar 
     progress_bar = tqdm(loader, leave=True) 
 
