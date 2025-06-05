@@ -116,7 +116,7 @@ train_dataset = Dataset(
     label_dir = "/app/yolo/Dataset/dataset2/train/labels",
     grid_sizes=[13, 26, 52], 
     anchors=ANCHORS, 
-    transform=test_transform 
+    transform=train_transform 
 ) 
 val_dataset = Dataset( 
         yaml_file = "/app/yolo/Dataset/dataset2/custom_data2.yaml",
