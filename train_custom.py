@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 import numpy as np 
 
-from custom_model import YOLO,  ANCHORS, test_transform, s, CONF_THRESHOLD, class_labels
-from HelpFunction import  device, check_class_accuracy, mean_average_precision, get_evaluation_bboxes, convert_cells_to_bboxes, plot_image
+from custom_model import YOLO,  ANCHORS, test_transform, s, CONF_THRESHOLD, train_transform
+from HelpFunction import  device, check_class_accuracy, convert_cells_to_bboxes, plot_image, nms
 from Dataset import Dataset
 from YoloLoss import YOLOLoss
 
@@ -21,14 +21,14 @@ from PIL import Image
 # Hyper Parameter
 BATCH_SIZE = 16
 EPOCHS = 50
-LR = 1e-4
+LR = 0.5e-4
 NUM_CLASS = 26
-
+target_size=(832,832)
 
 print(f"Training device: {device}")
 #Training loop
 # Define the train function to train the model 
-def training_loop(loader, model, optimizer, loss_fn, scaler, scaled_anchors): 
+def training_loop(loader, model, optimizer, loss_fn, scaler, scaled_anchors, epoch): 
     model.train()
     # Creating a progress bar 
     progress_bar = tqdm(loader, leave=True) 
@@ -74,10 +74,13 @@ def training_loop(loader, model, optimizer, loss_fn, scaler, scaled_anchors):
         mean_loss = sum(losses) / len(losses) 
         progress_bar.set_postfix(loss=mean_loss)
 
-        mlflow.log_metric("Batch loss", loss.item(), step= _)
+        #mlflow.log_metric("Batch loss", loss.item(), step= _)
 
-        mlflow.log_metric("epoch mean loss: ", mean_loss)
-     
+        mlflow.log_metric("epoch mean loss: ", mean_loss, step=epoch)
+       
+       
+
+
 def evaluate(dataloader, model, loss_fn, scaled_anchors):
     # Set the model to evaluation mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
@@ -107,9 +110,9 @@ def evaluate(dataloader, model, loss_fn, scaled_anchors):
                 val_loss += loss.item()          
     val_loss /= num_batches
 
-    mlflow.log_metric("Val loss", val_loss)
     return val_loss
 # Creating  dataset object 
+'''
 train_dataset = Dataset( 
     yaml_file = "/app/yolo/Dataset/dataset2/custom_data2.yaml",
     image_dir = "/app/yolo/Dataset/dataset2/train/images",
@@ -118,14 +121,33 @@ train_dataset = Dataset(
     anchors=ANCHORS, 
     transform=train_transform 
 ) 
+'''
+train_dataset = Dataset( 
+    yaml_file = "/app/yolo/Dataset/Neu_Dataset/custom_data2.yaml",
+    image_dir = "/app/yolo/Dataset/Neu_Dataset/train/images",
+    label_dir = "/app/yolo/Dataset/Neu_Dataset/train/labels",
+    grid_sizes=[13, 26, 52], 
+    anchors=ANCHORS, 
+    transform=train_transform 
+) 
+'''
 val_dataset = Dataset( 
         yaml_file = "/app/yolo/Dataset/dataset2/custom_data2.yaml",
         image_dir = "/app/yolo/Dataset/dataset2/valid/images",
-        label_dir = "/app/yolo/Dataset/dataset2/valid/labels",
+        label_dir =  "/app/yolo/Dataset/dataset2/valid/labels",
         grid_sizes=[13, 26, 52], 
         anchors=ANCHORS, 
         transform=test_transform 
     ) 
+'''
+val_dataset = Dataset( 
+    yaml_file = "/app/yolo/Dataset/Neu_Dataset/custom_data2.yaml",
+    image_dir = "/app/yolo/Dataset/Neu_Dataset/valid/images",
+    label_dir = "/app/yolo/Dataset/Neu_Dataset/valid/labels",
+    grid_sizes=[13, 26, 52], 
+    anchors=ANCHORS, 
+    transform=test_transform 
+) 
 test_dataset = Dataset( 
         yaml_file = "/app/yolo/Dataset/dataset2/custom_data2.yaml",
         image_dir = "/app/yolo/Dataset/dataset2/test/images",
@@ -163,9 +185,7 @@ val_loader = DataLoader(
         
     ) 
 
-    # Initialize model, optimizer, and loss function
-
-#from mlflow.models.signature import infer_signature
+# Initialize model, optimizer, and loss function
 model = YOLO().to(device)
 optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=1e-5)
 criterion = YOLOLoss() # Your loss function from earlier
@@ -184,7 +204,6 @@ def main ():
         torch.tensor(ANCHORS) * 
         torch.tensor(s).unsqueeze(1).unsqueeze(1).repeat(1,3,2) 
     ).to(device) 
-    #scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode ='min', factor =0.1, patience=3)
     mlflow.pytorch.autolog()
 
@@ -199,11 +218,12 @@ def main ():
         for epoch in range(EPOCHS): 
         
             print(f"Epoch: {epoch+1}/{EPOCHS}, Learning Rate: {optimizer.param_groups[0]['lr']} ") 
-            training_loop(train_loader, model, optimizer, criterion, scaler, scaled_anchors)
+            training_loop(train_loader, model, optimizer, criterion, scaler, scaled_anchors, epoch=epoch)
             check_class_accuracy(model=model, loader= train_loader, threshold= CONF_THRESHOLD,epoch= epoch)
             val_loss = evaluate(val_loader, model,  criterion, scaled_anchors)     
             scheduler.step(val_loss) # Learning rate mit valuation loss anpassen um Overfiting zuvermeiden
-            
+            mlflow.log_metric("Val loss", val_loss, step=epoch)
+    
             # Schleife um die Beste Model speichern und frühe aufhören falls Overfiting gibt
             if val_loss < best_loss:
                 best_loss = val_loss
@@ -216,28 +236,33 @@ def main ():
             else:
                 epoch_no_improve +=1
                 print(f" No improvement for {epoch_no_improve} epoch")
-                #if epoch_no_improve >= patience:
-                    #print(f" Early stopping triggered")
-                    #break
+              
+            
+            
 
 import matplotlib.pyplot as plt
 import albumentations as A 
 from albumentations.pytorch import ToTensorV2 
 import cv2
 
+
 def test():   
-    
-    model_uri = 'runs:/b68f628ece284b3886c419a7736bf18c/best_model'
-    #model_uri = 'runs:/1eb3230637334c628a3e198f7b1cabca/model'
+       
+    model_uri = 'runs:/25ec0f1cb17b4249b308c50b29e18c73/best_model'
+    #model_uri = 'runs:/9b0b7712e3904e42b69ec62357fe25c7/best_model'
+    #model_uri = 'runs:/5ed02747e2f64c86991a7349187b25d2/best_model'
     loaded_model = mlflow.pytorch.load_model(model_uri).to(device)
     
     loaded_model.eval()
-    #print(type(loaded_model))
-    #print(dir(loaded_model))
-    #print(loaded_model)
-    image = Image.open("/app/yolo/Test Bild/test4.jpeg").convert("RGB")
-    image_resize= image.resize((416,416))
+
+    image = Image.open("/app/yolo/Test Bild/2025-06-03-120848.jpg").convert("RGB")
+    #image_resize= image.resize((416,416),resample = 1)
+    image_np =np.array(image)
+    image_crop = image.crop((int(image_np.shape[1]/2)-int(target_size[1]/2), image_np.shape[0]-target_size[0], int(image_np.shape[1]/2)+int(target_size[1]/2), image_np.shape[0]))
+    image_resize= image_crop.resize((416,416),resample = 0)
     image_np =np.array(image_resize)
+    #image_croped= image_np[image_np.shape[0]-target_size[0]:image_np.shape[0], int(image_np.shape[1]/2)-int(target_size[1]/2):int(image_np.shape[1]/2)+int(target_size[1]/2)]
+    
     transform = A.Compose( 
 	[ 
 		# Rescale an image so that maximum side is equal to image_size 
@@ -246,9 +271,10 @@ def test():
 		A.PadIfNeeded( 
 			min_height=416, min_width= 416, border_mode=cv2.BORDER_CONSTANT
 		), 
-		# Normalize the image 
+        # Normalize the image 
 		A.Normalize( 
-			mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255
+            mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255
+			
 		), 
 		# Convert the image to PyTorch tensor 
 		ToTensorV2() 
@@ -265,10 +291,6 @@ def test():
     with torch.no_grad():
         outputs = loaded_model(image_tensor)
         
-        #print("Ouput is none", outputs is None)
-        #print("output", outputs)
-        #print(type(outputs))
-       
         boxes =[]
         for i, out in enumerate(outputs):
             grid_size= out.shape[2]
@@ -279,14 +301,16 @@ def test():
 
         all_boxes = [b for scale in boxes for b in scale]
         boxes_for_image = all_boxes[0]
-        boxes_for_image =[box for box in boxes_for_image if box[1]>0.3]
-        plot_image(image_np, boxes_for_image)
+        boxes_for_image =[box for box in boxes_for_image if box[1]>0.5]
+        #nms_boxes = nms(bboxes=boxes_for_image, iou_threshold=0.5,threshold=0.3)
+        nms_boxes = nms(bboxes=boxes_for_image, iou_threshold=0.5,threshold=0.5)
+
+        plot_image(image_np, nms_boxes)
         
 
 
 if __name__ == "__main__":
     #main()
-
     test()
  
     

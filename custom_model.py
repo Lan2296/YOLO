@@ -8,6 +8,18 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2 
 import cv2 
 
+def check_bbox(bbox):
+    """Check if bbox boundaries are in range 0, 1 and minimums are lesser then maximums"""
+   #my added block 
+    bbox=list(bbox[0])
+    for i in range(4):
+      if (bbox[i]<0) :
+        bbox[i]=0
+      elif (bbox[i]>1) :
+        bbox[i]=1
+    bbox=[bbox]
+    return bbox
+
 # Defining CNN Block 
 class CNNBlock(nn.Module): 
 	def __init__(self, in_channels, out_channels, use_batch_norm=True, **kwargs): 
@@ -41,9 +53,11 @@ class ResidualBlock(nn.Module):
 					nn.Conv2d(channels, channels // 2, kernel_size=1), 
 					nn.BatchNorm2d(channels // 2), 
 					nn.LeakyReLU(0.1), 
+			
 					nn.Conv2d(channels // 2, channels, kernel_size=3, padding=1), 
 					nn.BatchNorm2d(channels), 
-					nn.LeakyReLU(0.1) 
+					nn.LeakyReLU(0.1),
+					
 				) 
 			] 
 		self.layers = nn.ModuleList(res_layers) 
@@ -90,7 +104,6 @@ class YOLO(nn.Module):
 
 		# Layers list for YOLOv3 
 		self.layers = nn.ModuleList([ 
-			################ Backbone  ################
 			CNNBlock(in_channels, 32, kernel_size=3, stride=1, padding=1), 
 			CNNBlock(32, 64, kernel_size=3, stride=2, padding=1), 
 			ResidualBlock(64, num_repeats=1), 
@@ -101,30 +114,26 @@ class YOLO(nn.Module):
 			CNNBlock(256, 512, kernel_size=3, stride=2, padding=1), 
 			ResidualBlock(512, num_repeats=8), 
 			CNNBlock(512, 1024, kernel_size=3, stride=2, padding=1), 
-			ResidualBlock(1024, num_repeats=4),
-			################ Neck  ################
+			ResidualBlock(1024, num_repeats=4), ################ endet Darknet-53
 			CNNBlock(1024, 512, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(512, 1024, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(1024, use_residual=False, num_repeats=1), 
-			## Erste Skala (größte Objekte)
 			CNNBlock(1024, 512, kernel_size=1, stride=1, padding=0), 
 			ScalePrediction(512, num_classes=num_classes), 
 			CNNBlock(512, 256, kernel_size=1, stride=1, padding=0), 
-			#### Upsampling für mittlere Skala
-			nn.Upsample(scale_factor=2), 
+			nn.Upsample(scale_factor=2,mode='bilinear'), 
 			CNNBlock(768, 256, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(256, 512, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(512, use_residual=False, num_repeats=1), 
 			CNNBlock(512, 256, kernel_size=1, stride=1, padding=0), 
 			ScalePrediction(256, num_classes=num_classes), 
-			#### Upsampling für kleinste Skala
 			CNNBlock(256, 128, kernel_size=1, stride=1, padding=0), 
-			nn.Upsample(scale_factor=2), 
+			nn.Upsample(scale_factor=2,mode='bilinear'), 
 			CNNBlock(384, 128, kernel_size=1, stride=1, padding=0), 
 			CNNBlock(128, 256, kernel_size=3, stride=1, padding=1), 
 			ResidualBlock(256, use_residual=False, num_repeats=1), 
 			CNNBlock(256, 128, kernel_size=1, stride=1, padding=0), 
-			ScalePrediction(128, num_classes=num_classes)
+			ScalePrediction(128, num_classes=num_classes) 
 		]) 
 	
 	# Forward pass for YOLOv3 with route connections and scale predictions 
@@ -193,10 +202,16 @@ train_transform = A.Compose(
 		), 
 		# Flip the image horizontally 
 		A.HorizontalFlip(p=0.5), 
+		A.AdditiveNoise(
+						noise_type="uniform",
+						spatial_mode="constant",
+						noise_params={"ranges": [(-0.2, 0.2), (-0.1, 0.1), (-0.1, 0.1)]}
+						),
+		
 		# Normalize the image 
 		A.Normalize( 
 			mean=[0, 0, 0], std=[1, 1, 1], max_pixel_value=255
-		
+	
 		), 
 		# Convert the image to PyTorch tensor 
 		ToTensorV2() 

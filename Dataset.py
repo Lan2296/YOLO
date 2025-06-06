@@ -9,6 +9,7 @@ import yaml
 from glob import glob
 from HelpFunction import iou
 
+
 # Create a dataset class to load the images and labels from the folder 
 class Dataset(torch.utils.data.Dataset): 
     def __init__( 
@@ -17,7 +18,7 @@ class Dataset(torch.utils.data.Dataset):
         num_classes=26, transform=None
     ): 
         # Read the csv file with image names and labels 
-        with open ("/app/yolo/Dataset/dataset2/custom_data2.yaml") as f:
+        with open ("/app/yolo/Dataset/BigData/custom_data2.yaml") as f:
             data = yaml.safe_load_all(f) ##
             loaded_data = list(data)
     
@@ -27,7 +28,8 @@ class Dataset(torch.utils.data.Dataset):
         
         # Bilddateien sammeln
         self.image_files = glob(os.path.join(self.image_dir,'*.jpg')) + glob(os.path.join(self.image_dir,'*.png'))
-        
+      
+  
         # Modellparameter
         # Image size 
         self.image_size = image_size 
@@ -61,7 +63,7 @@ class Dataset(torch.utils.data.Dataset):
         # 5 columns: x, y, width, height, class_label 
         # Label einlesen
         bboxes = np.roll(np.loadtxt(fname=label_path, delimiter=" ", ndmin=2), 4, axis=1).tolist()
-    
+
             
         
         # Bild laden
@@ -73,6 +75,7 @@ class Dataset(torch.utils.data.Dataset):
             augs = self.transform(image=image, bboxes=bboxes) 
             image = augs["image"] 
             bboxes = augs["bboxes"] 
+        
 
         # Below assumes 3 scale predictions (as paper) and same num of anchors per scale 
         # target : [probabilities, x, y, width, height, class_label] 
@@ -152,13 +155,15 @@ def test():
         yaml_file = "/app/yolo/Dataset/dataset2/custom_data2.yaml",
         image_dir = "/app/yolo/Dataset/dataset2/test/images",
         label_dir = "/app/yolo/Dataset/dataset2/test/labels",
-        anchors=anchors,
-        transform=transform,
+        grid_sizes=[13, 26, 52], 
+        anchors=ANCHORS, 
+        transform=test_transform 
     )
     s = [13, 26, 52]
     scaled_anchors = torch.tensor(anchors) / (
         1 / torch.tensor(s).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
     )
+    print(len(dataset))
     loader = DataLoader(dataset=dataset, batch_size=1, shuffle=True)
     print("type:", type(class_labels))
     print("lenght des class labels:", len(class_labels))

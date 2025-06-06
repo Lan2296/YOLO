@@ -12,7 +12,7 @@ from  custom_model import class_labels
 from collections import Counter
 import mlflow
 # Device 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Defining a function to calculate Intersection over Union (IoU)
 def iou(box1, box2, is_pred=True):
     if is_pred:
@@ -171,6 +171,7 @@ def plot_image(image, boxes):
     for box in boxes:
         assert len(box) == 6, "box should contain class pred, confidence, x, y, width, height"
         class_pred = box[0]
+        conf = box[1]
         box = box[2:]
         upper_left_x = box[0] - box[2] / 2
         upper_left_y = box[1] - box[3] / 2
@@ -187,22 +188,14 @@ def plot_image(image, boxes):
         plt.text(
             upper_left_x * width,
             upper_left_y * height,
-            s=class_labels[int(class_pred)],
+            s=class_labels[int(class_pred)] + ": " + str(round(conf,2)) ,
             color="white",
             verticalalignment="top",
             bbox={"color": colors[int(class_pred)], "pad": 0},
+            
         )
 
     plt.show()
-'''
-# Function to save checkpoint 
-def save_checkpoint(model, optimizer, filename="my_checkpoint.pth.tar"): 
-	print("==> Saving checkpoint") 
-	checkpoint = { 
-		"state_dict": model.state_dict(), 
-		"optimizer": optimizer.state_dict(), 
-	} 
-	torch.save(checkpoint, filename)
 '''
 # Function to calculates mean average precision 
 def mean_average_precision(pred_boxes, true_boxes, iou_threshold = 0.5, box_format = "midpoint", num_classes = 26):
@@ -293,10 +286,8 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold = 0.5, box_form
         average_precisions.append(torch.trapz(precisions, recalls))
         map_val = sum(average_precisions) / len(average_precisions)
 
-        mlflow.log_metric("mAP ", map_val)
-
-    return map_val
-
+        return map_val
+'''
 # Function to check accruracy of class
 def check_class_accuracy(model, loader, threshold, epoch):
     model.eval()
@@ -336,7 +327,7 @@ def check_class_accuracy(model, loader, threshold, epoch):
     mlflow.log_metric("Obj accuracy", (correct_obj/(tot_obj+1e-16))*100, step=epoch)
 
     model.train()
-
+'''
 def get_evaluation_bboxes(
         
     loader,
@@ -345,7 +336,7 @@ def get_evaluation_bboxes(
     anchors,
     threshold,
     box_format="midpoint",
-    device="cuda",
+    device=device,
 ):
     # make sure model is in eval before get bboxes
     model.eval()
@@ -392,7 +383,6 @@ def get_evaluation_bboxes(
             train_idx += 1
 
     model.train()
-    #mlflow.log_metric("Pred boxes", all_pred_boxes)
-    #mlflow.log_metric("True", all_true_boxes)
+  
     return all_pred_boxes, all_true_boxes
-
+'''
